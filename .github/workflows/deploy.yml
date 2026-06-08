@@ -11,9 +11,11 @@ jobs:
   test:
     environment: testing
     runs-on: ubuntu-latest
+    container:
+      image: node:16
     env:
       MONGODB_CONNECTION_PROTOCOL: mongodb+srv
-      MONGODB_CLUSTER_ADDRESS: ${{ secrets.MONDODB_CONNECTION }}
+      MONGODB_CLUSTER_ADDRESS: ${{ secrets.MONGODB_CONNECTION }}
       MONGODB_USERNAME: ${{ secrets.MONGODB_USERNAME }}
       MONGODB_PASSWORD: ${{ secrets.MONGODB_PASSWORD }}
       PORT: 8080
@@ -28,20 +30,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run server
-        run: npm start & npx wait-on http://127.0.0.1:$PORT # requires MongoDB Atlas to accept requests from anywhere!
+        run: npm start & npx wait-on http://127.0.0.1:$PORT
       - name: Run tests
         run: npm test
-      - name: Output information
-        run: |
-          echo "MONGODB_USERNAME: $MONGODB_USERNAME"
   deploy:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Output information
+      - name: Get Code
+        uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t my-app .
+      - name: Run container with secrets
         env:
-          PORT: 3000
-        run: |        
-          echo "MONGODB_DB_NAME: $MONGODB_DB_NAME"
-          echo "MONGODB_USERNAME: $MONGODB_USERNAME"
-          echo "${{ env.PORT }}"
+          MONGODB_CLUSTER_ADDRESS: ${{ secrets.MONGODB_CONNECTION }}
+          MONGODB_USERNAME: ${{ secrets.MONGODB_USERNAME }}
+          MONGODB_PASSWORD: ${{ secrets.MONGODB_PASSWORD }}
+        run: |
+          docker run -d \
+            -e MONGODB_CLUSTER_ADDRESS=$MONGODB_CLUSTER_ADDRESS \
+            -e MONGODB_USERNAME=$MONGODB_USERNAME \
+            -e MONGODB_PASSWORD=$MONGODB_PASSWORD \
+            -e MONGODB_CONNECTION_PROTOCOL=mongodb+srv \
+            -e MONGODB_DB_NAME=${{ env.MONGODB_DB_NAME }} \
+            -e PORT=3000 \
+            -p 3000:3000 \
+            my-app
